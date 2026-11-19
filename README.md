@@ -46,10 +46,18 @@ docker compose ps        # tunggu status "healthy"
 | `PG_SHM_SIZE` | Ukuran `/dev/shm`; naikkan bila pakai parallel query besar |
 | `SSL_CN` | Hostname/IP untuk sertifikat SSL self-signed |
 | `TZ` | Zona waktu, mis. `Asia/Jakarta` |
+| `PGADMIN_VERSION` | Tag image `dpage/pgadmin4`, default `latest` |
+| `PGADMIN_CONTAINER_NAME` | Nama container pgAdmin; volume bernama `<PGADMIN_CONTAINER_NAME>_data` |
+| `PGADMIN_DEFAULT_EMAIL` / `PGADMIN_DEFAULT_PASSWORD` | Login pgAdmin |
+| `PGADMIN_BIND_ADDRESS` | `127.0.0.1` = lokal saja (default), `0.0.0.0` = semua interface |
+| `PGADMIN_PORT` | Port pgAdmin di host (default `5050`) |
+| `PGADMIN_MAX_LOGIN_ATTEMPTS` | Akun pgAdmin dikunci setelah sekian kali gagal login |
 
 > **Penting:** `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `APP_*`, dan
 > `SSL_CN` **hanya dipakai saat volume pertama kali dibuat**. Mengubahnya
 > setelah itu tidak berpengaruh — lihat [Ganti password](#ganti-password).
+> Hal yang sama berlaku untuk `PGADMIN_DEFAULT_EMAIL` / `PGADMIN_DEFAULT_PASSWORD`
+> (volume pgAdmin); setelah itu ganti password lewat UI pgAdmin.
 
 ## Koneksi
 
@@ -72,6 +80,25 @@ Untuk verifikasi sertifikat server (mencegah man-in-the-middle):
 docker exec postgres18 cat /var/lib/postgresql/18/docker/server.crt > server.crt
 psql "host=<HOST> port=5433 user=app_user dbname=appdb sslmode=verify-ca sslrootcert=server.crt"
 ```
+
+## pgAdmin
+
+Buka `http://localhost:5050` (sesuai `PGADMIN_PORT`), login dengan
+`PGADMIN_DEFAULT_EMAIL` / `PGADMIN_DEFAULT_PASSWORD`. Server PostgreSQL sudah
+terdaftar otomatis (host `postgres`, SSL `require`, user `POSTGRES_USER`);
+tinggal masukkan `POSTGRES_PASSWORD` saat connect.
+
+pgAdmin hanya melayani HTTP, jadi defaultnya di-bind ke `127.0.0.1`. Akses dari
+komputer lain lewat SSH tunnel:
+
+```bash
+ssh -L 5050:localhost:5050 user@server   # lalu buka http://localhost:5050
+```
+
+Jika `PGADMIN_BIND_ADDRESS=0.0.0.0`, pasang reverse proxy HTTPS di depannya
+dan batasi IP lewat firewall.
+
+Tidak butuh pgAdmin? Jalankan hanya database: `docker compose up -d postgres`.
 
 ## Tuning performa (pgtune)
 
@@ -181,5 +208,5 @@ docker exec postgres18 pg_dumpall -U admin > all_$(date +%F).sql
 | `role "postgres" does not exist` | Memang tidak ada; gunakan `-U admin` |
 | `permission denied for database` | User tidak punya hak `CONNECT` ke DB tersebut |
 | Perubahan `.env` (user/password) tidak berlaku | Hanya berlaku saat init volume; gunakan `ALTER USER` |
-| `port is already allocated` | Port dipakai service lain; ganti `POSTGRES_PORT` |
+| `port is already allocated` | Port dipakai service lain; ganti `POSTGRES_PORT` / `PGADMIN_PORT` |
 | Setting pgtune tidak berubah | Sudah `docker restart`? Cek `sourcefile` di `pg_settings` |
