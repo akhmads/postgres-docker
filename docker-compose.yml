@@ -71,6 +71,66 @@ services:
       retries: 5
       start_period: 30s
 
+  pgadmin:
+    image: dpage/pgadmin4:${PGADMIN_VERSION:-latest}
+    container_name: ${PGADMIN_CONTAINER_NAME:-pgadmin}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:?PGADMIN_DEFAULT_EMAIL wajib diisi di .env}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:?PGADMIN_DEFAULT_PASSWORD wajib diisi di .env}
+      # Port non-privileged supaya jalan dengan cap_drop: ALL
+      PGADMIN_LISTEN_PORT: "8080"
+      PGADMIN_DISABLE_POSTFIX: "true"
+      PGADMIN_CONFIG_ENHANCED_COOKIE_PROTECTION: "True"
+      PGADMIN_CONFIG_MAX_LOGIN_ATTEMPTS: ${PGADMIN_MAX_LOGIN_ATTEMPTS:-5}
+      TZ: ${TZ:-UTC}
+    ports:
+      # Default 127.0.0.1: pgAdmin hanya HTTP, jangan dibuka publik tanpa reverse proxy HTTPS
+      - "${PGADMIN_BIND_ADDRESS:-127.0.0.1}:${PGADMIN_PORT:-5050}:8080"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    configs:
+      # Server PostgreSQL di atas otomatis terdaftar (hanya saat volume pgAdmin pertama dibuat)
+      - source: pgadmin_servers
+        target: /pgadmin4/servers.json
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/misc/ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+configs:
+  pgadmin_servers:
+    content: |
+      {
+        "Servers": {
+          "1": {
+            "Name": "${CONTAINER_NAME:-postgres18}",
+            "Group": "Servers",
+            "Host": "postgres",
+            "Port": 5432,
+            "MaintenanceDB": "${POSTGRES_DB:-postgres}",
+            "Username": "${POSTGRES_USER}",
+            "ConnectionParameters": { "sslmode": "require" }
+          }
+        }
+      }
+
 volumes:
   pgdata:
     name: ${CONTAINER_NAME:-postgres18}_data
+  pgadmin_data:
+    name: ${PGADMIN_CONTAINER_NAME:-pgadmin}_data
